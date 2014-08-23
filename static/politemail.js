@@ -1,5 +1,8 @@
 $(function() {
+    var tmplOption = Hogan.compile($('#tmpl-option').html());
+
     $('#option-add').click(function() {
-        alert('hi');
+        var cell = tmplOption.render();
+        $('.option-grid .cell:last').before(cell);
     });
 });
