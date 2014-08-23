@@ -1,1 +1,17 @@
 @import "../bower_components/bootstrap/less/bootstrap.less";
+
+.option-grid {
+    .make-row();
+    margin-bottom: 15px;
+}
+
+.option-grid .cell {
+    .make-md-column(3);
+    .make-sm-column(3);
+}
+
+.option-grid .cell button {
+    width: 100%;
+    color: @input-border;
+    border-style: dashed;
+}
