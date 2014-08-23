@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-var cache = NewCache(".")
+var cache = NewCache("template")
 
 func handleCompose(w http.ResponseWriter, r *http.Request) {
 	data := struct {
