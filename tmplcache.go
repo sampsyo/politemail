@@ -11,6 +11,8 @@ type TemplateCache struct {
 	SearchDir string
 	Extension string
 	Debug     bool
+	Common    []string
+	BaseDef   string
 }
 
 func NewCache(dir string) *TemplateCache {
@@ -22,9 +24,23 @@ func NewCache(dir string) *TemplateCache {
 	return c
 }
 
+func (c *TemplateCache) makeFilename(tmplname string) string {
+	return path.Join(c.SearchDir, tmplname+c.Extension)
+}
+
 func (c *TemplateCache) Load(name string) *template.Template {
-	path := path.Join(c.SearchDir, name+c.Extension)
-	return template.Must(template.ParseFiles(path))
+	count := 1
+	if c.Common != nil {
+		count += len(c.Common)
+	}
+	filenames := make([]string, count)
+	if c.Common != nil {
+		for i := 0; i < len(c.Common); i++ {
+			filenames[i] = c.makeFilename(c.Common[i])
+		}
+	}
+	filenames[count-1] = c.makeFilename(name)
+	return template.Must(template.ParseFiles(filenames...))
 }
 
 func (c *TemplateCache) Lookup(name string) *template.Template {
@@ -44,5 +60,9 @@ func (c *TemplateCache) Lookup(name string) *template.Template {
 
 func (c *TemplateCache) Render(w io.Writer, name string, data interface{}) {
 	tmpl := c.Lookup(name)
-	tmpl.Execute(w, data)
+	if c.BaseDef == "" {
+		tmpl.Execute(w, data)
+	} else {
+		tmpl.ExecuteTemplate(w, c.BaseDef, data)
+	}
 }

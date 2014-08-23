@@ -39,7 +39,10 @@ func handleMessage(w http.ResponseWriter, r *http.Request) {
 func main() {
 	debug := flag.Bool("debug", false, "always reload templates")
 	flag.Parse()
+
 	cache.Debug = *debug
+	cache.Common = []string{"base"}
+	cache.BaseDef = "base"
 
 	r := mux.NewRouter()
 	r.HandleFunc("/", handleCompose)
