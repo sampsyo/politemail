@@ -6,7 +6,7 @@ import (
 	"net/http"
 )
 
-var cache = NewCache("template")
+var cache = NewCache("./template")
 
 func handleCompose(w http.ResponseWriter, r *http.Request) {
 	data := struct {
@@ -20,6 +20,7 @@ func handleCompose(w http.ResponseWriter, r *http.Request) {
 func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/", handleCompose)
+	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./static")))
 
 	fmt.Println("http://0.0.0.0:8080")
 	http.Handle("/", r)
