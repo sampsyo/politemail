@@ -13,4 +13,4 @@ $(BOWER_STUFF):
 setup: $(BOWER_STUFF)
 
 run: static/politemail.css
-	go run politemail.go tmplcache.go
+	go run politemail.go tmplcache.go -debug

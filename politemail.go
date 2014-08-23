@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/gorilla/mux"
 	"net/http"
@@ -18,6 +19,10 @@ func handleCompose(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	debug := flag.Bool("debug", false, "always reload templates")
+	flag.Parse()
+	cache.Debug = *debug
+
 	r := mux.NewRouter()
 	r.HandleFunc("/", handleCompose)
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./static")))
