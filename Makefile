@@ -6,6 +6,8 @@ BOWER_DEPS := bootstrap\#~3.2.0 jquery\#~2.1.1
 BOWER_STUFF := bower_components/bootstrap/bower.json
 static/politemail.css: template/politemail.less $(BOWER_STUFF)
 	./node_modules/less/bin/lessc $(LESSARGS) $< $@
+static/jquery.js: bower_components/jquery/dist/jquery.min.js
+	cp $< $@
 
 # Somewhat dumb way to invoke setup on first run (but not thereafter) or on
 # manual invocation.
@@ -17,5 +19,5 @@ setup: $(BOWER_STUFF)
 clean:
 	rm -rf node_modules bower_components static/politemail.css
 
-run: static/politemail.css
+run: static/politemail.css static/jquery.js
 	go run politemail.go tmplcache.go -debug
