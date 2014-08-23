@@ -1,4 +1,7 @@
-.PHONY: setup run
+NODE_DEPS := bower@~1.3.9 less@~1.7.4
+BOWER_DEPS := bootstrap\#~3.2.0 jquery\#~2.1.1
+
+.PHONY: setup clean run
 
 BOWER_STUFF := bower_components/bootstrap/bower.json
 static/politemail.css: template/politemail.less $(BOWER_STUFF)
@@ -7,10 +10,12 @@ static/politemail.css: template/politemail.less $(BOWER_STUFF)
 # Somewhat dumb way to invoke setup on first run (but not thereafter) or on
 # manual invocation.
 $(BOWER_STUFF):
-	npm install bower@~1.3.9
-	npm install less@~1.7.4
-	./node_modules/bower/bin/bower install
+	npm install $(NODE_DEPS)
+	./node_modules/bower/bin/bower install $(BOWER_DEPS)
 setup: $(BOWER_STUFF)
+
+clean:
+	rm -rf node_modules bower_components static/politemail.css
 
 run: static/politemail.css
 	go run politemail.go tmplcache.go -debug
