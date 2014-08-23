@@ -1,8 +1,12 @@
 $(function() {
     var tmplOption = Hogan.compile($('#tmpl-option').html());
 
-    $('#option-add').click(function() {
+    var addOption = function() {
         var cell = tmplOption.render();
         $('.option-grid .cell:last').before(cell);
-    });
+    }
+
+    addOption();
+
+    $('#option-add').click(addOption);
 });
