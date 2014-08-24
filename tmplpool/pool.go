@@ -1,4 +1,4 @@
-package main
+package tmplpool
 
 import (
 	"html/template"
@@ -15,7 +15,7 @@ type TemplateCache struct {
 	BaseDef   string
 }
 
-func NewCache(dir string) *TemplateCache {
+func New(dir string) *TemplateCache {
 	c := new(TemplateCache)
 	c.Templates = make(map[string]*template.Template)
 	c.SearchDir = dir

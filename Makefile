@@ -22,4 +22,4 @@ clean:
 	rm -rf node_modules bower_components static/politemail.css
 
 run: static/politemail.css static/jquery.js static/hogan.js
-	go run politemail.go tmplcache.go -debug
+	go run main.go -debug

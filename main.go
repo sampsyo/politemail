@@ -4,10 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"github.com/gorilla/mux"
+	"github.com/sampsyo/politemail/tmplpool"
 	"net/http"
 )
 
-var cache = NewCache("./template")
+var cache = tmplpool.New("./template")
 
 func handleCompose(w http.ResponseWriter, r *http.Request) {
 	data := struct {
