@@ -6,7 +6,7 @@ import (
 	"path"
 )
 
-type TemplateCache struct {
+type Pool struct {
 	Templates map[string]*template.Template
 	SearchDir string
 	Extension string
@@ -15,8 +15,8 @@ type TemplateCache struct {
 	BaseDef   string
 }
 
-func New(dir string) *TemplateCache {
-	c := new(TemplateCache)
+func New(dir string) *Pool {
+	c := new(Pool)
 	c.Templates = make(map[string]*template.Template)
 	c.SearchDir = dir
 	c.Extension = ".html"
@@ -24,11 +24,11 @@ func New(dir string) *TemplateCache {
 	return c
 }
 
-func (c *TemplateCache) makeFilename(tmplname string) string {
+func (c *Pool) makeFilename(tmplname string) string {
 	return path.Join(c.SearchDir, tmplname+c.Extension)
 }
 
-func (c *TemplateCache) Load(name string) *template.Template {
+func (c *Pool) Load(name string) *template.Template {
 	count := 1
 	if c.Common != nil {
 		count += len(c.Common)
@@ -43,7 +43,7 @@ func (c *TemplateCache) Load(name string) *template.Template {
 	return template.Must(template.ParseFiles(filenames...))
 }
 
-func (c *TemplateCache) Lookup(name string) *template.Template {
+func (c *Pool) Lookup(name string) *template.Template {
 	if c.Debug {
 		return c.Load(name)
 	} else {
@@ -58,7 +58,7 @@ func (c *TemplateCache) Lookup(name string) *template.Template {
 	}
 }
 
-func (c *TemplateCache) Render(w io.Writer, name string, data interface{}) {
+func (c *Pool) Render(w io.Writer, name string, data interface{}) {
 	tmpl := c.Lookup(name)
 	if c.BaseDef == "" {
 		tmpl.Execute(w, data)

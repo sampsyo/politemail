@@ -6,17 +6,21 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/sampsyo/politemail/tmplpool"
 	"net/http"
+	"path"
 )
 
-var cache = tmplpool.New("./template")
+type App struct {
+	basedir   string
+	templates *tmplpool.Pool
+}
 
-func handleCompose(w http.ResponseWriter, r *http.Request) {
+func (a *App) handleCompose(w http.ResponseWriter, r *http.Request) {
 	data := struct {
 		Foo string
 	}{
 		"bar",
 	}
-	cache.Render(w, "compose", data)
+	a.templates.Render(w, "compose", data)
 }
 
 type Message struct {
@@ -26,7 +30,7 @@ type Message struct {
 	Options []string
 }
 
-func handleMessage(w http.ResponseWriter, r *http.Request) {
+func (a *App) handleMessage(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	msg := Message{
 		r.FormValue("to"),
@@ -34,23 +38,36 @@ func handleMessage(w http.ResponseWriter, r *http.Request) {
 		r.FormValue("body"),
 		r.Form["option"],
 	}
-	cache.Render(w, "confirm", msg)
+	a.templates.Render(w, "confirm", msg)
+}
+
+func (a *App) handler() http.Handler {
+	r := mux.NewRouter()
+	r.HandleFunc("/", a.handleCompose)
+	r.HandleFunc("/message", a.handleMessage)
+	staticdir := path.Join(a.basedir, "static")
+	r.PathPrefix("/").Handler(http.FileServer(http.Dir(staticdir)))
+	return r
+}
+
+func NewApp(basedir string, debug bool) *App {
+	app := new(App)
+	app.basedir = basedir
+
+	app.templates = tmplpool.New(path.Join(basedir, "template"))
+	app.templates.Debug = debug
+	app.templates.Common = []string{"base"}
+	app.templates.BaseDef = "base"
+
+	return app
 }
 
 func main() {
 	debug := flag.Bool("debug", false, "always reload templates")
 	flag.Parse()
 
-	cache.Debug = *debug
-	cache.Common = []string{"base"}
-	cache.BaseDef = "base"
-
-	r := mux.NewRouter()
-	r.HandleFunc("/", handleCompose)
-	r.HandleFunc("/message", handleMessage)
-	r.PathPrefix("/").Handler(http.FileServer(http.Dir("./static")))
-
+	app := NewApp(".", *debug)
 	fmt.Println("http://0.0.0.0:8080")
-	http.Handle("/", r)
+	http.Handle("/", app.handler())
 	http.ListenAndServe(":8080", nil)
 }
