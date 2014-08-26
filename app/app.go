@@ -26,6 +26,7 @@ type App struct {
 	mandrill     *gochimp.MandrillAPI
 	adminFrom    string
 	sessionStore *sessions.CookieStore
+	router       *mux.Router
 }
 
 func (a *App) getSession(r *http.Request) *sessions.Session {
@@ -77,9 +78,13 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	email := r.FormValue("email")
 	key := a.newLogin(email)
 
+	callbackUrl, err := a.router.Get("loginCallback").URL("key", key)
+	if err != nil {
+		log.Fatal(err)
+	}
 	body := fmt.Sprintf(
-		"Click this, please: http://0.0.0.0:8080/login/%s",
-		key,
+		"Click this, please: %s",
+		callbackUrl,
 	)
 
 	m := gochimp.Message{
@@ -92,7 +97,7 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		FromName:  "PoliteMail",
 	}
 	log.Println("sending login email to", email)
-	_, err := a.mandrill.MessageSend(m, false)
+	_, err = a.mandrill.MessageSend(m, false)
 	if err == nil {
 		log.Println("login email sent successfully")
 		a.templates.Render(w, "status", Status{
@@ -150,15 +155,19 @@ func (a *App) handleLoginCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) Handler() http.Handler {
-	r := mux.NewRouter()
-	r.HandleFunc("/", a.handleHome)
-	r.HandleFunc("/compose", a.handleCompose)
-	r.HandleFunc("/message", a.handleMessage)
-	r.HandleFunc("/login/{key}", a.handleLoginCallback)
-	r.HandleFunc("/login", a.handleLogin)
-	staticdir := path.Join(a.basedir, "static")
-	r.PathPrefix("/").Handler(http.FileServer(http.Dir(staticdir)))
-	return context.ClearHandler(r)
+	if a.router == nil {
+		r := mux.NewRouter()
+		r.HandleFunc("/", a.handleHome)
+		r.HandleFunc("/compose", a.handleCompose)
+		r.HandleFunc("/message", a.handleMessage)
+		r.HandleFunc("/login/{key}", a.handleLoginCallback).
+			Name("loginCallback")
+		r.HandleFunc("/login", a.handleLogin)
+		staticdir := path.Join(a.basedir, "static")
+		r.PathPrefix("/").Handler(http.FileServer(http.Dir(staticdir)))
+		a.router = r
+	}
+	return context.ClearHandler(a.router)
 }
 
 func New(basedir string, debug bool) *App {
