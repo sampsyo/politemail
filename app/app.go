@@ -27,13 +27,6 @@ func (a *App) handleCompose(w http.ResponseWriter, r *http.Request) {
 	a.templates.Render(w, "compose", data)
 }
 
-type Message struct {
-	To      string
-	Subject string
-	Body    string
-	Options []string
-}
-
 func (a *App) handleMessage(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	msg := Message{
