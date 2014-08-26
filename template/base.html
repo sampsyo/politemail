@@ -11,6 +11,17 @@
     <div class="container">
         <h1>PoliteMail</h1>
         {{template "body" .}}
+
+        <footer>
+            {{ if .userEmail }}
+                {{ .userEmail }} is being polite
+                <a href="{{ .logoutURL }}">
+                    log out
+                </a>
+            {{ else }}
+                hi
+            {{ end }}
+        </footer>
     </div>
 
     <script type="x-template" id="tmpl-option">

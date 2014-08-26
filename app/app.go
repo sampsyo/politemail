@@ -37,13 +37,20 @@ func (a *App) getSession(r *http.Request) *sessions.Session {
 	return session
 }
 
-func (a *App) handleCompose(w http.ResponseWriter, r *http.Request) {
-	data := struct {
-		Foo string
-	}{
-		"bar",
+type smap map[string]interface{}
+
+func (a *App) render(w http.ResponseWriter, r *http.Request, template string,
+	d smap) {
+	if d == nil {
+		d = smap{}
 	}
-	a.templates.Render(w, "compose", data)
+	d["userEmail"] = a.getSession(r).Values["email"]
+	d["logoutURL"], _ = a.router.Get("logout").URL()
+	a.templates.Render(w, template, d)
+}
+
+func (a *App) handleCompose(w http.ResponseWriter, r *http.Request) {
+	a.render(w, r, "compose", nil)
 }
 
 func (a *App) handleMessage(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +62,7 @@ func (a *App) handleMessage(w http.ResponseWriter, r *http.Request) {
 		r.Form["option"],
 	}
 	a.addMessage(&msg)
-	a.templates.Render(w, "confirm", msg)
+	a.render(w, r, "confirm", smap{"message": msg})
 }
 
 func (a *App) handleHome(w http.ResponseWriter, r *http.Request) {
@@ -63,15 +70,10 @@ func (a *App) handleHome(w http.ResponseWriter, r *http.Request) {
 	email, found := session.Values["email"]
 	if found {
 		email_ := email.(string)
-		a.templates.Render(w, "compose", struct{ From string }{email_})
+		a.render(w, r, "compose", smap{"From": email_})
 	} else {
-		a.templates.Render(w, "login", nil)
+		a.render(w, r, "login", nil)
 	}
-}
-
-type Status struct {
-	Title string
-	Body  string
 }
 
 func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -100,15 +102,15 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	_, err = a.mandrill.MessageSend(m, false)
 	if err == nil {
 		log.Println("login email sent successfully")
-		a.templates.Render(w, "status", Status{
-			"Login Email Sent",
-			"Take a look!",
+		a.render(w, r, "status", smap{
+			"Title": "Login Email Sent",
+			"Body":  "Take a look!",
 		})
 	} else {
 		log.Println("loging email failed:", err)
-		a.templates.Render(w, "status", Status{
-			"Login Failed",
-			"Sorry. :(",
+		a.render(w, r, "status", smap{
+			"Title": "Login Failed",
+			"Body":  "Sorry. :(",
 		})
 	}
 }
@@ -138,20 +140,27 @@ func (a *App) handleLoginCallback(w http.ResponseWriter, r *http.Request) {
 		session.Values["email"] = email
 		session.Save(r, w)
 
-		a.templates.Render(w, "status", Status{
-			"Login Successful",
-			fmt.Sprintf(
+		a.render(w, r, "status", smap{
+			"Title": "Login Successful",
+			"Body": fmt.Sprintf(
 				"You are logged in as %s.",
 				email,
 			),
 		})
 	} else {
 		log.Println("login failed:", err)
-		a.templates.Render(w, "status", Status{
-			"Login Failed",
-			"Try again, yo.",
+		a.render(w, r, "status", smap{
+			"Title": "Login Failed",
+			"Body":  "Try again, yo.",
 		})
 	}
+}
+
+func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
+	session := a.getSession(r)
+	session.Values["email"] = ""
+	session.Save(r, w)
+	a.render(w, r, "login", nil)
 }
 
 func (a *App) Handler() http.Handler {
@@ -163,6 +172,8 @@ func (a *App) Handler() http.Handler {
 		r.HandleFunc("/login/{key}", a.handleLoginCallback).
 			Name("loginCallback")
 		r.HandleFunc("/login", a.handleLogin)
+		r.HandleFunc("/logout", a.handleLogout).
+			Name("logout")
 		staticdir := path.Join(a.basedir, "static")
 		r.PathPrefix("/").Handler(http.FileServer(http.Dir(staticdir)))
 		a.router = r
