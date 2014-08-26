@@ -27,6 +27,7 @@ type App struct {
 	adminFrom    string
 	sessionStore *sessions.CookieStore
 	router       *mux.Router
+	baseURL      string
 }
 
 func (a *App) getSession(r *http.Request) *sessions.Session {
@@ -85,7 +86,8 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 	body := fmt.Sprintf(
-		"Click this, please: %s",
+		"Click this, please: %s/%s",
+		a.baseURL,
 		callbackUrl,
 	)
 
@@ -190,6 +192,7 @@ func New(basedir string, debug bool) *App {
 	mandrillKey := conf.String("mandrill_key", "")
 	sessionKey := conf.String("secret_key", "")
 	conf.StringVar(&app.adminFrom, "from", "politemail@example.com")
+	conf.StringVar(&app.baseURL, "base_url", "")
 	err := conf.Parse(path.Join(basedir, "config.toml"))
 	if err != nil {
 		log.Fatal(err)
