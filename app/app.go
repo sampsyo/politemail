@@ -1,7 +1,9 @@
 package app
 
 import (
+	"github.com/boltdb/bolt"
 	"github.com/gorilla/mux"
+	"log"
 	"net/http"
 	"path"
 )
@@ -13,6 +15,7 @@ import (
 type App struct {
 	basedir   string
 	templates *tmplpool.Pool
+	DB        *bolt.DB
 }
 
 func (a *App) handleCompose(w http.ResponseWriter, r *http.Request) {
@@ -39,6 +42,7 @@ func (a *App) handleMessage(w http.ResponseWriter, r *http.Request) {
 		r.FormValue("body"),
 		r.Form["option"],
 	}
+	a.addMessage(&msg)
 	a.templates.Render(w, "confirm", msg)
 }
 
@@ -60,5 +64,19 @@ func New(basedir string, debug bool) *App {
 	app.templates.Common = []string{"base"}
 	app.templates.BaseDef = "base"
 
+	db, err := bolt.Open(path.Join(basedir, "politemail.db"), 0600, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	db.Update(func(tx *bolt.Tx) error {
+		_, err := tx.CreateBucketIfNotExists([]byte("messages"))
+		return err
+	})
+	app.DB = db
+
 	return app
+}
+
+func (a *App) Teardown() {
+	a.DB.Close()
 }
