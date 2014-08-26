@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/boltdb/bolt"
+	"github.com/gorilla/context"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/sessions"
 	"github.com/mattbaird/gochimp"
 	"github.com/stvp/go-toml-config"
 	"log"
@@ -18,11 +20,20 @@ import (
 )
 
 type App struct {
-	basedir   string
-	templates *tmplpool.Pool
-	DB        *bolt.DB
-	mandrill  *gochimp.MandrillAPI
-	adminFrom string
+	basedir      string
+	templates    *tmplpool.Pool
+	DB           *bolt.DB
+	mandrill     *gochimp.MandrillAPI
+	adminFrom    string
+	sessionStore *sessions.CookieStore
+}
+
+func (a *App) getSession(r *http.Request) *sessions.Session {
+	session, err := a.sessionStore.Get(r, "session")
+	if err != nil {
+		log.Fatal("invalid session:", err)
+	}
+	return session
 }
 
 func (a *App) handleCompose(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +58,14 @@ func (a *App) handleMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleHome(w http.ResponseWriter, r *http.Request) {
-	a.templates.Render(w, "login", nil)
+	session := a.getSession(r)
+	email, found := session.Values["email"]
+	if found {
+		email_ := email.(string)
+		a.templates.Render(w, "compose", struct{ From string }{email_})
+	} else {
+		a.templates.Render(w, "login", nil)
+	}
 }
 
 type Status struct {
@@ -110,6 +128,11 @@ func (a *App) handleLoginCallback(w http.ResponseWriter, r *http.Request) {
 	email, err := a.verifyLogin(key)
 	if err == nil {
 		log.Println("login verified")
+
+		session := a.getSession(r)
+		session.Values["email"] = email
+		session.Save(r, w)
+
 		a.templates.Render(w, "status", Status{
 			"Login Successful",
 			fmt.Sprintf(
@@ -135,7 +158,7 @@ func (a *App) Handler() http.Handler {
 	r.HandleFunc("/login", a.handleLogin)
 	staticdir := path.Join(a.basedir, "static")
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir(staticdir)))
-	return r
+	return context.ClearHandler(r)
 }
 
 func New(basedir string, debug bool) *App {
@@ -145,6 +168,7 @@ func New(basedir string, debug bool) *App {
 	// Read configuration.
 	conf := config.NewConfigSet("", config.ExitOnError)
 	mandrillKey := conf.String("mandrill_key", "")
+	sessionKey := conf.String("secret_key", "")
 	conf.StringVar(&app.adminFrom, "from", "politemail@example.com")
 	err := conf.Parse(path.Join(basedir, "config.toml"))
 	if err != nil {
@@ -185,6 +209,12 @@ func New(basedir string, debug bool) *App {
 		log.Fatal(err)
 	}
 	app.mandrill = mandrill
+
+	// Session store.
+	if *sessionKey == "" {
+		log.Fatal("no secret key in config")
+	}
+	app.sessionStore = sessions.NewCookieStore([]byte(*sessionKey))
 
 	return app
 }
