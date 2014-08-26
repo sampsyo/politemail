@@ -1,6 +1,6 @@
 NODE_DEPS := bower@~1.3.9 less@~1.7.4
 BOWER_DEPS := bootstrap\#~3.2.0 jquery\#~2.1.1 hogan\#~3.0.2
-GO_SRC := main.go tmplpool/pool.go app/app.go
+GO_SRC := main.go tmplpool/pool.go app/app.go app/db.go
 STATIC := static/politemail.css static/jquery.js static/hogan.js
 TARGET := politemail
 

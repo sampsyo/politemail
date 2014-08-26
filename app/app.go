@@ -1,11 +1,16 @@
 package app
 
 import (
+	"errors"
+	"fmt"
 	"github.com/boltdb/bolt"
 	"github.com/gorilla/mux"
+	"github.com/mattbaird/gochimp"
+	"github.com/stvp/go-toml-config"
 	"log"
 	"net/http"
 	"path"
+	"time"
 )
 
 import (
@@ -16,6 +21,8 @@ type App struct {
 	basedir   string
 	templates *tmplpool.Pool
 	DB        *bolt.DB
+	mandrill  *gochimp.MandrillAPI
+	adminFrom string
 }
 
 func (a *App) handleCompose(w http.ResponseWriter, r *http.Request) {
@@ -43,8 +50,80 @@ func (a *App) handleHome(w http.ResponseWriter, r *http.Request) {
 	a.templates.Render(w, "login", nil)
 }
 
+type Status struct {
+	Title string
+	Body  string
+}
+
 func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("hi!"))
+	email := r.FormValue("email")
+	key := a.newLogin(email)
+
+	body := fmt.Sprintf(
+		"Click this, please: http://0.0.0.0:8080/login/%s",
+		key,
+	)
+
+	m := gochimp.Message{
+		Subject: "PoliteMail Login",
+		Text:    body,
+		To: []gochimp.Recipient{gochimp.Recipient{
+			Email: email,
+		}},
+		FromEmail: a.adminFrom,
+		FromName:  "PoliteMail",
+	}
+	log.Println("sending login email to", email)
+	_, err := a.mandrill.MessageSend(m, false)
+	if err == nil {
+		log.Println("login email sent successfully")
+		a.templates.Render(w, "status", Status{
+			"Login Email Sent",
+			"Take a look!",
+		})
+	} else {
+		log.Println("loging email failed:", err)
+		a.templates.Render(w, "status", Status{
+			"Login Failed",
+			"Sorry. :(",
+		})
+	}
+}
+
+func (a *App) verifyLogin(key string) (string, error) {
+	email, loginTime := a.getLogin(key)
+	if email == "" {
+		return "", errors.New("login request not found")
+	}
+	ago := time.Since(loginTime)
+	if ago > time.Hour {
+		return "", errors.New(
+			fmt.Sprintf("login too old: %i", ago),
+		)
+	}
+	return email, nil
+}
+
+func (a *App) handleLoginCallback(w http.ResponseWriter, r *http.Request) {
+	key := mux.Vars(r)["key"]
+	log.Println("verifying login", key)
+	email, err := a.verifyLogin(key)
+	if err == nil {
+		log.Println("login verified")
+		a.templates.Render(w, "status", Status{
+			"Login Successful",
+			fmt.Sprintf(
+				"You are logged in as %s.",
+				email,
+			),
+		})
+	} else {
+		log.Println("login failed:", err)
+		a.templates.Render(w, "status", Status{
+			"Login Failed",
+			"Try again, yo.",
+		})
+	}
 }
 
 func (a *App) Handler() http.Handler {
@@ -52,6 +131,7 @@ func (a *App) Handler() http.Handler {
 	r.HandleFunc("/", a.handleHome)
 	r.HandleFunc("/compose", a.handleCompose)
 	r.HandleFunc("/message", a.handleMessage)
+	r.HandleFunc("/login/{key}", a.handleLoginCallback)
 	r.HandleFunc("/login", a.handleLogin)
 	staticdir := path.Join(a.basedir, "static")
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir(staticdir)))
@@ -62,11 +142,22 @@ func New(basedir string, debug bool) *App {
 	app := new(App)
 	app.basedir = basedir
 
+	// Read configuration.
+	conf := config.NewConfigSet("", config.ExitOnError)
+	mandrillKey := conf.String("mandrill_key", "")
+	conf.StringVar(&app.adminFrom, "from", "politemail@example.com")
+	err := conf.Parse(path.Join(basedir, "config.toml"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Template pool.
 	app.templates = tmplpool.New(path.Join(basedir, "template"))
 	app.templates.Debug = debug
 	app.templates.Common = []string{"base"}
 	app.templates.BaseDef = "base"
 
+	// Database connection.
 	db, err := bolt.Open(path.Join(basedir, "politemail.db"), 0600, nil)
 	if err != nil {
 		log.Fatal(err)
@@ -77,9 +168,23 @@ func New(basedir string, debug bool) *App {
 			return err
 		}
 		_, err = tx.CreateBucketIfNotExists([]byte("users"))
+		if err != nil {
+			return err
+		}
+		_, err = tx.CreateBucketIfNotExists([]byte("logins"))
 		return err
 	})
 	app.DB = db
+
+	// Mandrill API.
+	if *mandrillKey == "" {
+		log.Fatal("no Mandrill key in config")
+	}
+	mandrill, err := gochimp.NewMandrill(*mandrillKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+	app.mandrill = mandrill
 
 	return app
 }
