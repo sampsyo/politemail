@@ -39,10 +39,20 @@ func (a *App) handleMessage(w http.ResponseWriter, r *http.Request) {
 	a.templates.Render(w, "confirm", msg)
 }
 
+func (a *App) handleHome(w http.ResponseWriter, r *http.Request) {
+	a.templates.Render(w, "login", nil)
+}
+
+func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("hi!"))
+}
+
 func (a *App) Handler() http.Handler {
 	r := mux.NewRouter()
-	r.HandleFunc("/", a.handleCompose)
+	r.HandleFunc("/", a.handleHome)
+	r.HandleFunc("/compose", a.handleCompose)
 	r.HandleFunc("/message", a.handleMessage)
+	r.HandleFunc("/login", a.handleLogin)
 	staticdir := path.Join(a.basedir, "static")
 	r.PathPrefix("/").Handler(http.FileServer(http.Dir(staticdir)))
 	return r
@@ -63,6 +73,10 @@ func New(basedir string, debug bool) *App {
 	}
 	db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte("messages"))
+		if err != nil {
+			return err
+		}
+		_, err = tx.CreateBucketIfNotExists([]byte("users"))
 		return err
 	})
 	app.DB = db
