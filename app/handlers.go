@@ -10,17 +10,20 @@ import (
 	"time"
 )
 
-func (a *App) handleCompose(w http.ResponseWriter, r *http.Request) {
-	a.render(w, r, "compose", nil)
-}
-
 func (a *App) handleMessage(w http.ResponseWriter, r *http.Request) {
+	state := getState(r)
+	if !state.LoggedIn {
+		http.Error(w, "not allowed", 403)
+		return
+	}
+
 	r.ParseForm()
 	msg := Message{
-		r.FormValue("to"),
-		r.FormValue("subject"),
-		r.FormValue("body"),
-		r.Form["option"],
+		From:    getState(r).Email,
+		To:      r.FormValue("to"),
+		Subject: r.FormValue("subject"),
+		Body:    r.FormValue("body"),
+		Options: r.Form["option"],
 	}
 	a.addMessage(&msg)
 	a.render(w, r, "confirm", smap{"message": msg})

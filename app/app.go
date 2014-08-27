@@ -86,7 +86,6 @@ func (a *App) Handler() http.Handler {
 		r := mux.NewRouter()
 		r.HandleFunc("/", a.handleHome).
 			Name("home")
-		r.HandleFunc("/compose", a.handleCompose)
 		r.HandleFunc("/message", a.handleMessage)
 		r.HandleFunc("/login/{key}", a.handleLoginCallback).
 			Name("loginCallback")
