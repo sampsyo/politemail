@@ -10,6 +10,13 @@
 <body>
     <div class="container">
         <h1>PoliteMail</h1>
+
+        {{ range .flashes }}
+        <p class="flash">
+            {{ . }}
+        </p>
+        {{ end }}
+
         {{template "body" .}}
 
         <footer>

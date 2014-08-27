@@ -49,6 +49,11 @@ func (a *App) getSession(r *http.Request) *sessions.Session {
 	return session
 }
 
+func (a *App) redirectHome(w http.ResponseWriter, r *http.Request) {
+	homeURL, _ := a.router.Get("home").URL()
+	http.Redirect(w, r, homeURL.String(), 302)
+}
+
 type smap map[string]interface{}
 
 func (a *App) render(w http.ResponseWriter, r *http.Request, template string,
@@ -58,6 +63,15 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, template string,
 	}
 	d["state"] = getState(r)
 	d["logoutURL"], _ = a.router.Get("logout").URL()
+
+	session := a.getSession(r)
+	flashes := session.Flashes()
+	d["flashes"] = flashes
+	if len(flashes) > 0 {
+		// Clear flashes.
+		session.Save(r, w)
+	}
+
 	a.templates.Render(w, template, d)
 }
 
@@ -78,11 +92,9 @@ func (a *App) handleMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleHome(w http.ResponseWriter, r *http.Request) {
-	session := a.getSession(r)
-	email, found := session.Values["email"]
-	if found {
-		email_ := email.(string)
-		a.render(w, r, "compose", smap{"From": email_})
+	state := getState(r)
+	if state.LoggedIn {
+		a.render(w, r, "compose", smap{"From": state.Email})
 	} else {
 		a.render(w, r, "login", nil)
 	}
@@ -97,7 +109,7 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 	body := fmt.Sprintf(
-		"Click this, please: %s/%s",
+		"Click this, please: %s%s",
 		a.baseURL,
 		callbackUrl,
 	)
@@ -111,21 +123,19 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		FromEmail: a.adminFrom,
 		FromName:  "PoliteMail",
 	}
+
 	log.Println("sending login email to", email)
 	_, err = a.mandrill.MessageSend(m, false)
+	session := a.getSession(r)
 	if err == nil {
 		log.Println("login email sent successfully")
-		a.render(w, r, "status", smap{
-			"Title": "Login Email Sent",
-			"Body":  "Take a look!",
-		})
+		session.AddFlash("Login email sent. Please check your mail.")
 	} else {
 		log.Println("loging email failed:", err)
-		a.render(w, r, "status", smap{
-			"Title": "Login Failed",
-			"Body":  "Sorry. :(",
-		})
+		session.AddFlash("The login email failed to send!")
 	}
+	session.Save(r, w)
+	a.redirectHome(w, r)
 }
 
 func (a *App) verifyLogin(key string) (string, error) {
@@ -143,38 +153,30 @@ func (a *App) verifyLogin(key string) (string, error) {
 }
 
 func (a *App) handleLoginCallback(w http.ResponseWriter, r *http.Request) {
+	session := a.getSession(r)
+
 	key := mux.Vars(r)["key"]
 	log.Println("verifying login", key)
 	email, err := a.verifyLogin(key)
 	if err == nil {
 		log.Println("login verified")
-
-		session := a.getSession(r)
 		session.Values["email"] = email
-		session.Save(r, w)
-
-		a.render(w, r, "status", smap{
-			"Title": "Login Successful",
-			"Body": fmt.Sprintf(
-				"You are logged in as %s.",
-				email,
-			),
-		})
+		session.AddFlash("You are now logged in.")
 	} else {
 		log.Println("login failed:", err)
-		a.render(w, r, "status", smap{
-			"Title": "Login Failed",
-			"Body":  "Try again, yo.",
-		})
+		session.AddFlash("This login link is invalid. Please try again.")
 	}
+
+	session.Save(r, w)
+	a.redirectHome(w, r)
 }
 
 func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 	session := a.getSession(r)
 	session.Values["email"] = ""
+	session.AddFlash("You are now logged out.")
 	session.Save(r, w)
-	homeURL, _ := a.router.Get("home").URL()
-	http.Redirect(w, r, homeURL.String(), 302)
+	a.redirectHome(w, r)
 }
 
 func (a *App) beforeRequest(w http.ResponseWriter, r *http.Request) {
