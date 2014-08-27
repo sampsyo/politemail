@@ -3,6 +3,7 @@ package app
 import (
 	"code.google.com/p/go-uuid/uuid"
 	"encoding/json"
+	"errors"
 	"github.com/boltdb/bolt"
 	"log"
 	"time"
@@ -26,12 +27,46 @@ type Login struct {
 	Time  time.Time
 }
 
-func (a *App) addMessage(m *Message) []byte {
+// Add a user if it doesn't exist yet.
+func (a *App) ensureUserExists(email string) {
+	key := []byte(email)
+	a.DB.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("users"))
+		j := b.Get(key)
+		if j == nil {
+			j, _ := json.Marshal(User{
+				email,
+				[][]byte{},
+			})
+			return b.Put(key, j)
+		}
+		return nil
+	})
+}
+
+func (a *App) addMessage(email string, m *Message) []byte {
 	key := []byte(uuid.New())
 	j, _ := json.Marshal(m)
 	a.DB.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("messages"))
-		err := b.Put(key, j)
+		// Create the message.
+		messages := tx.Bucket([]byte("messages"))
+		err := messages.Put(key, j)
+
+		// Add the message to the user's list.
+		users := tx.Bucket([]byte("users"))
+		userj := users.Get([]byte(email))
+		if userj == nil {
+			return errors.New("no such user")
+		}
+		user := User{}
+		err = json.Unmarshal(userj, &user)
+		if err != nil {
+			return err
+		}
+		user.MessageIds = append(user.MessageIds, key)
+		newUserj, _ := json.Marshal(user)
+		users.Put([]byte(email), newUserj)
+
 		return err
 	})
 	return key

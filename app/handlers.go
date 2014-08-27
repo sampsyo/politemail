@@ -17,15 +17,16 @@ func (a *App) handleMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	email := getState(r).Email
 	r.ParseForm()
 	msg := Message{
-		From:    getState(r).Email,
+		From:    email,
 		To:      r.FormValue("to"),
 		Subject: r.FormValue("subject"),
 		Body:    r.FormValue("body"),
 		Options: r.Form["option"],
 	}
-	a.addMessage(&msg)
+	a.addMessage(email, &msg)
 	a.render(w, r, "confirm", smap{"message": msg})
 }
 
@@ -99,6 +100,7 @@ func (a *App) handleLoginCallback(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		log.Println("login verified")
 		session.Values["email"] = email
+		a.ensureUserExists(email)
 		session.AddFlash("You are now logged in.")
 	} else {
 		log.Println("login failed:", err)
