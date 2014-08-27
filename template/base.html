@@ -13,8 +13,8 @@
         {{template "body" .}}
 
         <footer>
-            {{ if .userEmail }}
-                {{ .userEmail }} is being polite
+            {{ if .state.LoggedIn }}
+                {{ .state.Email }} is being polite
                 <a href="{{ .logoutURL }}">
                     log out
                 </a>

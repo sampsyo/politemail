@@ -30,6 +30,17 @@ type App struct {
 	baseURL      string
 }
 
+type ReqState struct {
+	Email    string
+	LoggedIn bool
+}
+
+const ReqStateKey int = 512
+
+func getState(r *http.Request) ReqState {
+	return context.Get(r, ReqStateKey).(ReqState)
+}
+
 func (a *App) getSession(r *http.Request) *sessions.Session {
 	session, err := a.sessionStore.Get(r, "session")
 	if err != nil {
@@ -45,7 +56,7 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, template string,
 	if d == nil {
 		d = smap{}
 	}
-	d["userEmail"] = a.getSession(r).Values["email"]
+	d["state"] = getState(r)
 	d["logoutURL"], _ = a.router.Get("logout").URL()
 	a.templates.Render(w, template, d)
 }
@@ -162,13 +173,24 @@ func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 	session := a.getSession(r)
 	session.Values["email"] = ""
 	session.Save(r, w)
-	a.render(w, r, "login", nil)
+	homeURL, _ := a.router.Get("home").URL()
+	http.Redirect(w, r, homeURL.String(), 302)
+}
+
+func (a *App) beforeRequest(w http.ResponseWriter, r *http.Request) {
+	session := a.getSession(r)
+	email := session.Values["email"]
+	context.Set(r, ReqStateKey, ReqState{
+		Email:    email.(string),
+		LoggedIn: email != "",
+	})
 }
 
 func (a *App) Handler() http.Handler {
 	if a.router == nil {
 		r := mux.NewRouter()
-		r.HandleFunc("/", a.handleHome)
+		r.HandleFunc("/", a.handleHome).
+			Name("home")
 		r.HandleFunc("/compose", a.handleCompose)
 		r.HandleFunc("/message", a.handleMessage)
 		r.HandleFunc("/login/{key}", a.handleLoginCallback).
@@ -176,11 +198,21 @@ func (a *App) Handler() http.Handler {
 		r.HandleFunc("/login", a.handleLogin)
 		r.HandleFunc("/logout", a.handleLogout).
 			Name("logout")
+
+		// Probably just for debugging. Production should have this served by
+		// a frontend.
 		staticdir := path.Join(a.basedir, "static")
 		r.PathPrefix("/").Handler(http.FileServer(http.Dir(staticdir)))
+
 		a.router = r
 	}
-	return context.ClearHandler(a.router)
+
+	// Ridiculous-looking hack to get a "setup" call before each handler.
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		a.beforeRequest(w, r)
+		a.router.ServeHTTP(w, r)
+	})
+	return context.ClearHandler(h)
 }
 
 func New(basedir string, debug bool) *App {
