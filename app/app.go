@@ -131,22 +131,10 @@ func New(basedir string, debug bool) *App {
 	app.templates.BaseDef = "base"
 
 	// Database connection.
-	db, err := bolt.Open(path.Join(basedir, "politemail.db"), 0600, nil)
+	db, err := openDB(path.Join(basedir, "politemail.db"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("messages"))
-		if err != nil {
-			return err
-		}
-		_, err = tx.CreateBucketIfNotExists([]byte("users"))
-		if err != nil {
-			return err
-		}
-		_, err = tx.CreateBucketIfNotExists([]byte("logins"))
-		return err
-	})
 	app.DB = db
 
 	// Mandrill API.
